@@ -1,11 +1,27 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { WordExample } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+// Retrieve API key from various possible environment locations
+// Supports process.env (Node/Webpack) and import.meta.env (Vite/Netlify)
+const getApiKey = (): string | undefined => {
+  if (typeof process !== 'undefined' && process.env?.API_KEY) {
+    return process.env.API_KEY;
+  }
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+  return undefined;
+};
+
+const apiKey = getApiKey();
+
+if (!apiKey) {
+  throw new Error("API_KEY environment variable not set. Please set API_KEY or VITE_API_KEY.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey });
 
 export const generateWordsForLetter = async (letter: string): Promise<WordExample[]> => {
   const model = "gemini-2.5-flash";
