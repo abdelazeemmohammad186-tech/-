@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WordExample } from '../types';
 import { generateWordsForLetter, generateSpeech, generateImageForWord } from '../services/geminiService';
 import WritingCanvas from './WritingCanvas';
@@ -23,10 +24,16 @@ const LetterDetail: React.FC<LetterDetailProps> = ({ letter, onBack }) => {
   const [error, setError] = useState<string | null>(null);
   const { playAudio, isPlaying } = useAudioPlayer();
   const [playingText, setPlayingText] = useState<string | null>(null);
+  
+  // Track which images are currently being fetched to prevent duplicate requests
+  const fetchingImagesRef = useRef<Set<string>>(new Set());
 
   const fetchWords = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setWords([]); // Clear previous words
+    fetchingImagesRef.current.clear(); // Reset fetching tracker
+    
     try {
       const fetchedWords = await generateWordsForLetter(letter);
       setWords(fetchedWords);
@@ -43,27 +50,27 @@ const LetterDetail: React.FC<LetterDetailProps> = ({ letter, onBack }) => {
   }, [fetchWords]);
 
   useEffect(() => {
-    // Check if words are loaded but images are not
-    if (words.length > 0 && !words.some(w => w.imageUrl)) {
-      const fetchImages = async () => {
-        // Use Promise.all to fetch all images in parallel
-        const wordsWithImages = await Promise.all(
-          words.map(async (wordObject) => {
-            try {
-              const imageUrl = await generateImageForWord(wordObject.word);
-              return { ...wordObject, imageUrl };
-            } catch (e) {
-              console.error(`Failed to load image for ${wordObject.word}`, e);
-              // Return the original object on failure so the UI doesn't break
-              return wordObject;
-            }
-          })
-        );
-        setWords(wordsWithImages);
-      };
+    // Iterate through words to fetch images for those that don't have them yet
+    words.forEach((wordObj) => {
+      if (!wordObj.imageUrl && !fetchingImagesRef.current.has(wordObj.word)) {
+        // Mark as fetching
+        fetchingImagesRef.current.add(wordObj.word);
 
-      fetchImages();
-    }
+        generateImageForWord(wordObj.word)
+          .then((imageUrl) => {
+            // Update state with the new image URL for the specific word
+            setWords((prevWords) =>
+              prevWords.map((w) =>
+                w.word === wordObj.word ? { ...w, imageUrl } : w
+              )
+            );
+          })
+          .catch((e) => {
+            console.error(`Failed to load image for ${wordObj.word}`, e);
+            // We don't remove it from the ref, so we don't endlessly retry failed requests
+          });
+      }
+    });
   }, [words]);
 
   const handlePlaySound = useCallback(async (text: string) => {
@@ -82,15 +89,25 @@ const LetterDetail: React.FC<LetterDetailProps> = ({ letter, onBack }) => {
 
   return (
     <div className="bg-white/70 backdrop-blur-sm p-4 sm:p-8 rounded-2xl shadow-lg animate-fade-in">
+      <style>{`
+        @keyframes letterPop {
+          0% { transform: scale(0.5) translateY(20px); opacity: 0; }
+          50% { transform: scale(1.1) translateY(-10px); }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .animate-letter-pop {
+          animation: letterPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+      `}</style>
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
-          <div className="text-7xl sm:text-9xl font-extrabold text-amber-500 drop-shadow-lg">
+          <div className="text-7xl sm:text-9xl font-extrabold text-amber-500 drop-shadow-lg animate-letter-pop origin-left cursor-default select-none">
             {letter}
-            <span className="text-5xl sm:text-7xl">{letter.toLowerCase()}</span>
+            <span className="text-5xl sm:text-7xl ml-1">{letter.toLowerCase()}</span>
           </div>
           <button
             onClick={() => handlePlaySound(`Letter ${letter}`)}
-            className="p-3 bg-amber-400 text-white rounded-full hover:bg-amber-500 transition-colors shadow-md disabled:bg-gray-400"
+            className="p-3 bg-amber-400 text-white rounded-full hover:bg-amber-500 transition-colors shadow-md disabled:bg-gray-400 transform hover:scale-110 active:scale-95"
             disabled={isPlaying && playingText === `Letter ${letter}`}
             aria-label={`استمع لصوت حرف ${letter}`}
           >
