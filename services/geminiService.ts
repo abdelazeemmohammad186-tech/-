@@ -5,7 +5,7 @@ import { WordExample } from '../types';
 // Supports process.env (Node/Webpack) and import.meta.env (Vite/Netlify)
 const getApiKey = (): string | undefined => {
   if (typeof process !== 'undefined' && process.env?.API_KEY) {
-    return process.env.API_KEY;
+    return process.env.API_KEY || 'FAKE_API_KEY_FOR_DEVELOPMENT';
   }
   // @ts-ignore
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
