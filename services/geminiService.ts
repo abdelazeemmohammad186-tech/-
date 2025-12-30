@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { WordExample } from '../types';
 
-// Strict adherence to using process.env.API_KEY for Gemini API
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Strict adherence to using process.env.API_KEY || 'FAKE_API_KEY_FOR_DEVELOPMENT' for Gemini API
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || 'FAKE_API_KEY_FOR_DEVELOPMENT' as string });
 
 export const generateWordsForLetter = async (letter: string): Promise<WordExample[]> => {
   const model = "gemini-3-flash-preview";
