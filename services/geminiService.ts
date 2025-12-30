@@ -1,30 +1,11 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { WordExample } from '../types';
 
-// Retrieve API key from various possible environment locations
-// Supports process.env (Node/Webpack) and import.meta.env (Vite/Netlify)
-const getApiKey = (): string | undefined => {
-  if (typeof process !== 'undefined' && process.env?.API_KEY) {
-    return process.env.API_KEY || 'FAKE_API_KEY_FOR_DEVELOPMENT';
-  }
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
-    // @ts-ignore
-    return import.meta.env.VITE_API_KEY;
-  }
-  return undefined;
-};
-
-const apiKey = getApiKey();
-
-if (!apiKey) {
-  throw new Error("API_KEY environment variable not set. Please set API_KEY or VITE_API_KEY.");
-}
-
-const ai = new GoogleGenAI({ apiKey });
+// Strict adherence to using process.env.API_KEY for Gemini API
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 export const generateWordsForLetter = async (letter: string): Promise<WordExample[]> => {
-  const model = "gemini-2.5-flash";
+  const model = "gemini-3-flash-preview";
   const prompt = `For the English letter "${letter}", generate an array of 5 simple English words suitable for a 5-year-old Arabic-speaking child. Ensure the words demonstrate the letter's position at the beginning, middle, and end. For each word, provide its Arabic translation. Return ONLY a valid JSON array of objects, where each object has "word" and "translation" keys.`;
 
   try {
@@ -53,7 +34,7 @@ export const generateWordsForLetter = async (letter: string): Promise<WordExampl
       },
     });
 
-    const jsonString = response.text;
+    const jsonString = response.text || "[]";
     const words: WordExample[] = JSON.parse(jsonString);
     return words;
   } catch (error) {
@@ -92,7 +73,7 @@ export const generateSpeech = async (text: string): Promise<string> => {
 
 export const generateImageForWord = async (word: string): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const prompt = `A simple, cute, child-friendly cartoon illustration of a "${word}", with a plain white background.`;
+    const prompt = `A simple, cute, child-friendly cartoon illustration of a "${word}", with a plain white background. No text.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -101,11 +82,13 @@ export const generateImageForWord = async (word: string): Promise<string> => {
                 parts: [{ text: prompt }],
             },
             config: {
-                responseModalities: [Modality.IMAGE],
-            },
+                imageConfig: {
+                    aspectRatio: "1:1"
+                }
+            }
         });
 
-        for (const part of response.candidates[0].content.parts) {
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
             if (part.inlineData) {
                 const base64ImageBytes: string = part.inlineData.data;
                 const imageUrl = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
